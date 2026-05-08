@@ -1182,8 +1182,11 @@ function enterApp(){document.getElementById('loginScreen').classList.add('hidden
 function doLogout(){document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';currentRole='admin';currentTeacherId=null;}
 
 // ── STORAGE ──
-function save(){try{localStorage.setItem('itishniki_v6',JSON.stringify(DB));}catch(e){}}
-function load(){try{const d=localStorage.getItem('itishniki_v6')||localStorage.getItem('itishniki_v5');if(d){const p=JSON.parse(d);['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined)DB[k]=p[k];});}}catch(e){}}
+function save(){try{localStorage.setItem('itishniki_v6_1',JSON.stringify(DB));}catch(e){}}
+function load(){try{const d=localStorage.getItem('itishniki_v6_1')||localStorage.getItem('itishniki_v6')||localStorage.getItem('itishniki_v5');if(d){const p=JSON.parse(d);['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined)DB[k]=p[k];});
+  // Migration: fix old students where pay60 == hourRate (pre-v6.1)
+  DB.students.forEach(s=>{if(!s.pay60||s.pay60===s.hourRate||s.pay60===Math.round((s.hourRate||400)*1)){s.pay60=300;}if(!s.pay90||s.pay90===Math.round((s.hourRate||400)*1.5)){s.pay90=400;}if(!s.pay120||s.pay120===(s.hourRate||400)*2){s.pay120=500;}});
+  }}catch(e){}}
 
 // ── SEED ──
 function seedDemo(){
@@ -1201,7 +1204,7 @@ function seedDemo(){
     const c=DB.courses[i%DB.courses.length];
     const d=new Date(2025,8+Math.floor(i/3),1+(i%28));
     const tch=DB.teachers[i%4];
-    DB.students.push({id:1000+i,name:names[i%names.length],surname:snames[i%snames.length],age:8+i%15,gender:i%2===0?'М':'Ж',course:c.name,format:fmts[i%3],hourRate:400+(i%3)*50,pay60:400+(i%3)*50,pay90:Math.round((400+(i%3)*50)*1.5),pay120:(400+(i%3)*50)*2,source:DB.sources[i%DB.sources.length],parent:`Батьки ${snames[i%snames.length]}`,phone:`+380 9${i} 123 45 6${i}`,email:`parent${i}@gmail.com`,startDate:d.toISOString().split('T')[0],teacher:`${tch.name} ${tch.surname}`,status:i<13?'active':'inactive',note:'',tgLink:i%3===0?'https://t.me/+example':''});
+    DB.students.push({id:1000+i,name:names[i%names.length],surname:snames[i%snames.length],age:8+i%15,gender:i%2===0?'М':'Ж',course:c.name,format:fmts[i%3],hourRate:400+(i%3)*50,pay60:300,pay90:400,pay120:500,source:DB.sources[i%DB.sources.length],parent:`Батьки ${snames[i%snames.length]}`,phone:`+380 9${i} 123 45 6${i}`,email:`parent${i}@gmail.com`,startDate:d.toISOString().split('T')[0],teacher:`${tch.name} ${tch.surname}`,status:i<13?'active':'inactive',note:'',tgLink:i%3===0?'https://t.me/+example':''});
     if(i<13){
       DB.schedules[1000+i]=[
         {day:(1+i*2)%7,startTime:`${10+i%4}:00`,duration:60,course:c.name},
@@ -1219,8 +1222,8 @@ function seedDemo(){
     const pick=myStu.slice(0,1+i%2);
     const crs=DB.courses[i%DB.courses.length];
     const dur=60;
-    const pay=Math.round((tch.rate||350)*(dur/60));
-    DB.lessons.push({id:5000+i,name:`${crs.name}: урок ${i+1}`,course:crs.name,format:['Індивідуальний','Дуо','Група'][i%3],teacher:fn,teacherId:tch.id,studentIds:pick.map(s=>s.id),studentPrice:pick[0]?.hourRate||400,teacherPrice:pay,duration:dur,dateTime:localDateTimeStr(d),isRecorded:true});
+    const pay=pick[0]?.pay60||300;
+    DB.lessons.push({id:5000+i,name:`${crs.name}: урок ${i+1}`,course:crs.name,format:['Індивідуальний','Дуо','Група'][i%3],teacher:fn,teacherId:tch.id,studentIds:pick.map(s=>s.id),studentPrice:pick[0]?.hourRate||500,teacherPrice:pay,duration:dur,dateTime:localDateTimeStr(d),isRecorded:true});
   }
   for(let i=0;i<22;i++){
     const isInc=i%3!==2;
@@ -1648,9 +1651,9 @@ function renderStuRow(s,i,cols,tbl){
       case 'course':return`<td class="editable-cell" onclick="editStuSel(this,'course',${s.id},DB.courses.map(c=>c.name))">${(s.course||'—').split(' ')[0]} <span class="edit-ic">✏️</span></td>`;
       case 'format':return`<td><span class="badge ${fmtBadge(s.format)}">${s.format||'Інд.'}</span></td>`;
       case 'hourRate':return`<td class="editable-cell" onclick="editStuCell(this,'hourRate',${s.id},true)">₴${s.hourRate||0} <span class="edit-ic">✏️</span></td>`;
-      case 'pay60':return`<td class="editable-cell" onclick="editStuCell(this,'pay60',${s.id},true)" style="color:var(--cyan);">₴${s.pay60||calcPay(s,60)} <span class="edit-ic">✏️</span></td>`;
-      case 'pay90':return`<td class="editable-cell" onclick="editStuCell(this,'pay90',${s.id},true)" style="color:var(--purple);">₴${s.pay90||calcPay(s,90)} <span class="edit-ic">✏️</span></td>`;
-      case 'pay120':return`<td class="editable-cell" onclick="editStuCell(this,'pay120',${s.id},true)" style="color:var(--orange);">₴${s.pay120||calcPay(s,120)} <span class="edit-ic">✏️</span></td>`;
+      case 'pay60':return`<td class="editable-cell" onclick="editStuCell(this,'pay60',${s.id},true)" style="color:var(--cyan);">₴${s.pay60||300} <span class="edit-ic">✏️</span></td>`;
+      case 'pay90':return`<td class="editable-cell" onclick="editStuCell(this,'pay90',${s.id},true)" style="color:var(--purple);">₴${s.pay90||400} <span class="edit-ic">✏️</span></td>`;
+      case 'pay120':return`<td class="editable-cell" onclick="editStuCell(this,'pay120',${s.id},true)" style="color:var(--orange);">₴${s.pay120||500} <span class="edit-ic">✏️</span></td>`;
       case 'source':return`<td><span class="badge ${srcBadge(s.source)}">${s.source}</span></td>`;
       case 'teacher':return`<td class="editable-cell" onclick="editStuSel(this,'teacher',${s.id},DB.teachers.map(t=>t.name+' '+t.surname))">${s.teacher||'—'} <span class="edit-ic">✏️</span></td>`;
       case 'schedule':{const slots=DB.schedules[s.id]||[];return`<td><button class="btn btn-secondary btn-sm" onclick="openScheduleEditor(${s.id})">📅 ${slots.length}/тижд.</button></td>`;}
@@ -1664,7 +1667,7 @@ function renderStuRow(s,i,cols,tbl){
 }
 function editStuCell(el,f,id,isN=false){const s=DB.students.find(s=>s.id===id);if(!s)return;const val=f==='name'?`${s.name} ${s.surname}`:s[f];el.innerHTML=`<input class="inp" style="margin:0;padding:3px 6px;width:100%;min-width:65px;" value="${val}" onblur="saveStuCell(this,'${f}',${id},${isN})" onkeydown="if(event.key==='Enter')this.blur()">`;el.querySelector('input').focus();}
 function editStuSel(el,f,id,opts){const s=DB.students.find(s=>s.id===id);if(!s)return;el.innerHTML=`<select class="inp" style="margin:0;padding:3px 6px;width:100%;" onblur="saveStuCell(this,'${f}',${id},false)" onchange="saveStuCell(this,'${f}',${id},false)">${opts.map(o=>`<option${o===s[f]?' selected':''}>${o}</option>`).join('')}</select>`;el.querySelector('select').focus();}
-function saveStuCell(inp,f,id,isN){const s=DB.students.find(s=>s.id===id);if(!s)return;if(f==='name'){const p=inp.value.trim().split(' ');s.name=p[0]||s.name;s.surname=p.slice(1).join(' ')||s.surname;}else{s[f]=isN?+inp.value:inp.value;}if(f==='hourRate'){s.pay60=s.hourRate;s.pay90=Math.round(s.hourRate*1.5);s.pay120=s.hourRate*2;}save();renderStudentsTable();notify('✓','success');}
+function saveStuCell(inp,f,id,isN){const s=DB.students.find(s=>s.id===id);if(!s)return;if(f==='name'){const p=inp.value.trim().split(' ');s.name=p[0]||s.name;s.surname=p.slice(1).join(' ')||s.surname;}else{s[f]=isN?+inp.value:inp.value;}save();renderStudentsTable();notify('✓','success');}
 function filterStudents(q){document.querySelectorAll('#studentsTbody tr').forEach(r=>{r.style.display=r.textContent.toLowerCase().includes(q.toLowerCase())?'':'none';});}
 function toggleStatus(id){const s=DB.students.find(s=>s.id===id);if(s){s.status=s.status==='active'?'inactive':'active';save();renderStudentsTable();updateBadges();notify('Статус змінено');}}
 function removeStudent(id){if(!confirm('Видалити учня?'))return;DB.students=DB.students.filter(s=>s.id!==id);save();renderStudentsTable();updateBadges();}
