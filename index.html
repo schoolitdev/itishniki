@@ -379,8 +379,15 @@ tr:hover .edit-ic{opacity:1;}
       <div class="inp-group"><div class="inp-label">Стать</div><select class="inp" id="sGender"><option value="М">Хлопець (М)</option><option value="Ж">Дівчина (Ж)</option></select></div>
       <div class="inp-group"><div class="inp-label">Курс</div><select class="inp" id="sCourse"></select></div>
       <div class="inp-group"><div class="inp-label">Формат</div><select class="inp" id="sFormat"><option value="Індивідуальний">👤 Індивідуальний</option><option value="Дуо">👥 Дуо</option><option value="Група">👨‍👩‍👦 Група</option></select></div>
-      <div class="inp-group"><div class="inp-label">Ціна за 1 год (грн)</div><input class="inp" type="number" id="sHourRate" placeholder="400"></div>
+      <div class="inp-group"><div class="inp-label">Ціна за 1 год (грн)</div><input class="inp" type="number" id="sHourRate" placeholder="500"></div>
       <div class="inp-group"><div class="inp-label">Звідки дізнались</div><select class="inp" id="sSource"></select></div>
+    </div>
+    <div class="grid g3" style="margin-bottom:4px;">
+      <div class="inp-group"><div class="inp-label">ЗП вчителю 1год (грн)</div><input class="inp" type="number" id="sPay60" placeholder="300"></div>
+      <div class="inp-group"><div class="inp-label">ЗП вчителю 1.5год (грн)</div><input class="inp" type="number" id="sPay90" placeholder="400"></div>
+      <div class="inp-group"><div class="inp-label">ЗП вчителю 2год (грн)</div><input class="inp" type="number" id="sPay120" placeholder="500"></div>
+    </div>
+    <div class="grid g2">
       <div class="inp-group"><div class="inp-label">Батьки (ПІБ)</div><input class="inp" id="sParent" placeholder="Іванов Іван"></div>
       <div class="inp-group"><div class="inp-label">Телефон батьків</div><input class="inp" id="sPhone" placeholder="+380..."></div>
       <div class="inp-group"><div class="inp-label">Email батьків</div><input class="inp" id="sEmail" type="email" placeholder="email@gmail.com"></div>
@@ -1142,7 +1149,7 @@ const DB={
   customData:{},
   schedules:{},
   // Standard tariffs (editable per teacher in admin)
-  tariffs:{standard:{60:350,90:450,120:550}},
+  tariffs:{standard:{60:300,90:400,120:500}},
   teacherTariffs:{}, // {teacherId: {60:N, 90:N, 120:N}}
 };
 
@@ -1185,10 +1192,10 @@ function seedDemo(){
   const snames=['Коваль','Шевченко','Бойко','Мороз','Лисенко','Гончар','Тимченко','Власенко','Литвин','Романенко'];
   const fmts=['Індивідуальний','Дуо','Група'];
   DB.teachers=[
-    {id:1,name:'Олег',surname:'Кравченко',spec:'Python, Web, Node.js',rate:350,phone:'+380 91 111 22 33',email:'oleh@gmail.com',status:'active',login:'oleh',password:'oleh123'},
+    {id:1,name:'Олег',surname:'Кравченко',spec:'Python, Web, Node.js',rate:300,phone:'+380 91 111 22 33',email:'oleh@gmail.com',status:'active',login:'oleh',password:'oleh123'},
     {id:2,name:'Марина',surname:'Коваль',spec:'Scratch, Unity, GameDev',rate:300,phone:'+380 92 222 33 44',email:'marina@gmail.com',status:'active',login:'marina',password:'marina123'},
-    {id:3,name:'Артем',surname:'Шевченко',spec:'Frontend, React, CSS',rate:400,phone:'+380 93 333 44 55',email:'artem@gmail.com',status:'active',login:'artem',password:'artem123'},
-    {id:4,name:'Дмитро',surname:'Мороз',spec:'Backend, Django, SQL',rate:380,phone:'+380 94 444 55 66',email:'dmytro@gmail.com',status:'active',login:'dmytro',password:'dmytro123'},
+    {id:3,name:'Артем',surname:'Шевченко',spec:'Frontend, React, CSS',rate:300,phone:'+380 93 333 44 55',email:'artem@gmail.com',status:'active',login:'artem',password:'artem123'},
+    {id:4,name:'Дмитро',surname:'Мороз',spec:'Backend, Django, SQL',rate:300,phone:'+380 94 444 55 66',email:'dmytro@gmail.com',status:'active',login:'dmytro',password:'dmytro123'},
   ];
   for(let i=0;i<15;i++){
     const c=DB.courses[i%DB.courses.length];
@@ -1834,7 +1841,7 @@ function renderTeachers(){
     const subjs=(t.spec||'').split(',').map(s=>s.trim()).filter(Boolean);
     const login=t.login||(t.name.toLowerCase());
     const pwd=t.password||(t.name.toLowerCase()+'123');
-    const tariffs=DB.teacherTariffs[t.id]||DB.tariffs?.standard||{60:350,90:450,120:550};
+    const tariffs=DB.teacherTariffs[t.id]||DB.tariffs?.standard||{60:300,90:400,120:500};
     // Course notifs for this teacher
     const notifs=DB.courseNotifs?.filter(n=>n.teacherId===t.id&&!n.read)||[];
     return`<div class="card" style="border-top:3px solid ${COLORS[i%COLORS.length]};">
@@ -1876,7 +1883,7 @@ function renderTeachers(){
 // Tariff editor for admin
 function openTariffEditor(tid){
   const t=DB.teachers.find(t=>t.id===tid);if(!t)return;
-  const tariffs=DB.teacherTariffs[tid]||{60:350,90:450,120:550};
+  const tariffs=DB.teacherTariffs[tid]||{60:300,90:400,120:500};
   const v=prompt(`Тарифи для ${t.name} (формат: 60:350,90:450,120:550):`,Object.entries(tariffs).map(([d,r])=>`${d}:${r}`).join(','));
   if(v===null)return;
   const parsed={};v.split(',').forEach(pair=>{const[d,r]=pair.split(':');if(d&&r)parsed[+d]=+r;});
@@ -2119,12 +2126,12 @@ function updateAllSelects(){
 }
 
 // ══ STUDENT CRUD ══
-function openAddStudent(){document.getElementById('sEditId').value='';document.getElementById('mStudTitle').textContent='➕ Новий учень';['sName','sSurname','sParent','sPhone','sEmail','sNote','sTgLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('sAge').value='';document.getElementById('sHourRate').value='400';updateAllSelects();document.getElementById('modalStudent').classList.add('open');}
-function openEditStudent(id){const s=DB.students.find(s=>s.id===id);if(!s)return;document.getElementById('sEditId').value=id;document.getElementById('mStudTitle').textContent='✏️ Редагувати учня';updateAllSelects();['sName','sSurname','sAge','sGender','sCourse','sFormat','sHourRate','sSource','sParent','sPhone','sEmail','sStart','sTgLink','sNote','sTeacher'].forEach(fid=>{const el=document.getElementById(fid);if(!el)return;const map={sName:s.name,sSurname:s.surname,sAge:s.age,sGender:s.gender||'М',sCourse:s.course,sFormat:s.format||'Індивідуальний',sHourRate:s.hourRate||400,sSource:s.source,sParent:s.parent,sPhone:s.phone,sEmail:s.email,sStart:s.startDate,sTgLink:s.tgLink||'',sNote:s.note||'',sTeacher:s.teacher||''};el.value=map[fid]||'';});document.getElementById('modalStudent').classList.add('open');}
-function saveStudent(){const name=document.getElementById('sName').value.trim();const surname=document.getElementById('sSurname').value.trim();if(!name||!surname){notify('Введіть ім\'я та прізвище','error');return;}const editId=+document.getElementById('sEditId').value;const hr=+document.getElementById('sHourRate').value||400;const data={name,surname,age:+document.getElementById('sAge').value||10,gender:document.getElementById('sGender').value,course:document.getElementById('sCourse').value,format:document.getElementById('sFormat').value,hourRate:hr,pay60:hr,pay90:Math.round(hr*1.5),pay120:hr*2,source:document.getElementById('sSource').value,parent:document.getElementById('sParent').value,phone:document.getElementById('sPhone').value,email:document.getElementById('sEmail').value,startDate:document.getElementById('sStart').value,tgLink:document.getElementById('sTgLink').value,teacher:document.getElementById('sTeacher').value,note:document.getElementById('sNote').value};if(editId){const s=DB.students.find(s=>s.id===editId);if(s)Object.assign(s,data);}else DB.students.push({id:Date.now(),status:'active',...data});save();closeModal('modalStudent');renderAll();renderStudentsTable();initSourcesChart();notify(editId?'Учня оновлено ✓':'Учня додано! 🎉','success');}
+function openAddStudent(){document.getElementById('sEditId').value='';document.getElementById('mStudTitle').textContent='➕ Новий учень';['sName','sSurname','sParent','sPhone','sEmail','sNote','sTgLink'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('sAge').value='';document.getElementById('sHourRate').value='500';updateAllSelects();document.getElementById('modalStudent').classList.add('open');}
+function openEditStudent(id){const s=DB.students.find(s=>s.id===id);if(!s)return;document.getElementById('sEditId').value=id;document.getElementById('mStudTitle').textContent='✏️ Редагувати учня';updateAllSelects();['sName','sSurname','sAge','sGender','sCourse','sFormat','sHourRate','sSource','sParent','sPhone','sEmail','sStart','sTgLink','sNote','sTeacher'].forEach(fid=>{const el=document.getElementById(fid);if(!el)return;const map={sName:s.name,sSurname:s.surname,sAge:s.age,sGender:s.gender||'М',sCourse:s.course,sFormat:s.format||'Індивідуальний',sHourRate:s.hourRate||500,sSource:s.source,sParent:s.parent,sPhone:s.phone,sEmail:s.email,sStart:s.startDate,sTgLink:s.tgLink||'',sNote:s.note||'',sTeacher:s.teacher||''};el.value=map[fid]||'';});const p60=document.getElementById('sPay60');if(p60)p60.value=s.pay60||300;const p90=document.getElementById('sPay90');if(p90)p90.value=s.pay90||400;const p120=document.getElementById('sPay120');if(p120)p120.value=s.pay120||500;document.getElementById('modalStudent').classList.add('open');}
+function saveStudent(){const name=document.getElementById('sName').value.trim();const surname=document.getElementById('sSurname').value.trim();if(!name||!surname){notify('Введіть ім\'я та прізвище','error');return;}const editId=+document.getElementById('sEditId').value;const hr=+document.getElementById('sHourRate').value||500;const p60=+document.getElementById('sPay60').value||300;const p90=+document.getElementById('sPay90').value||400;const p120=+document.getElementById('sPay120').value||500;const data={name,surname,age:+document.getElementById('sAge').value||10,gender:document.getElementById('sGender').value,course:document.getElementById('sCourse').value,format:document.getElementById('sFormat').value,hourRate:hr,pay60:p60,pay90:p90,pay120:p120,source:document.getElementById('sSource').value,parent:document.getElementById('sParent').value,phone:document.getElementById('sPhone').value,email:document.getElementById('sEmail').value,startDate:document.getElementById('sStart').value,tgLink:document.getElementById('sTgLink').value,teacher:document.getElementById('sTeacher').value,note:document.getElementById('sNote').value};if(editId){const s=DB.students.find(s=>s.id===editId);if(s)Object.assign(s,data);}else DB.students.push({id:Date.now(),status:'active',...data});save();closeModal('modalStudent');renderAll();renderStudentsTable();initSourcesChart();notify(editId?'Учня оновлено ✓':'Учня додано! 🎉','success');}
 
 // ══ TEACHER CRUD ══
-function openAddTeacher(){document.getElementById('tEditId').value='';document.getElementById('mTchTitle').textContent='👨‍🏫 Додати';['tName','tSurname','tSpec','tPhone','tEmail','tPassword'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('tRate').value='350';document.getElementById('modalTeacher').classList.add('open');}
+function openAddTeacher(){document.getElementById('tEditId').value='';document.getElementById('mTchTitle').textContent='👨‍🏫 Додати';['tName','tSurname','tSpec','tPhone','tEmail','tPassword'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});document.getElementById('tRate').value='300';document.getElementById('modalTeacher').classList.add('open');}
 function openEditTeacher(id){const t=DB.teachers.find(t=>t.id===id);if(!t)return;document.getElementById('tEditId').value=id;document.getElementById('mTchTitle').textContent='✏️ Редагувати';document.getElementById('tName').value=t.name;document.getElementById('tSurname').value=t.surname;document.getElementById('tSpec').value=t.spec||'';document.getElementById('tRate').value=t.rate||350;document.getElementById('tPhone').value=t.phone;document.getElementById('tEmail').value=t.email;document.getElementById('tPassword').value=t.password||(t.name.toLowerCase()+'123');document.getElementById('modalTeacher').classList.add('open');}
 function saveTeacher(){
   const name=document.getElementById('tName').value.trim();const surname=document.getElementById('tSurname').value.trim();
@@ -2160,17 +2167,29 @@ function addDebt(){const sel=document.getElementById('dStudent');const studentId
 function openLessonRecord(){
   updateAllSelects();
   const now=new Date();const lrdt=document.getElementById('lrDateTime');if(lrdt)lrdt.value=localDateStr(now)+'T'+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');
-  const t=getMyT();if(t){const tp=document.getElementById('lrTeacherPrice');if(tp)tp.value=t.rate||350;}
+  // Pre-fill teacher pay from first student's pay60 (default 300)
+  const myStu=currentRole==='teacher'?getMyStudents():DB.students.filter(s=>s.status==='active');
+  const firstStu=myStu[0];const tp=document.getElementById('lrTeacherPrice');
+  if(tp)tp.value=firstStu?.pay60||300;
   document.getElementById('modalLessonRecord').classList.add('open');
 }
 function recordLesson(){
   const name=document.getElementById('lrName').value.trim();if(!name){notify('Введіть назву','error');return;}
   const checked=Array.from(document.querySelectorAll('#lrStudentList input:checked')).map(i=>+i.value);
   const dur=+document.getElementById('lrDuration').value||60;
-  const tp=+document.getElementById('lrTeacherPrice').value||350;
-  const teacherPay=Math.round(tp*(dur/60));
+  // Calculate teacher pay from first student's pay fields
+  const firstStu=checked.length?DB.students.find(s=>s.id===checked[0]):null;
+  let teacherPay;
+  if(firstStu){
+    if(dur<=60)teacherPay=firstStu.pay60||300;
+    else if(dur<=90)teacherPay=firstStu.pay90||400;
+    else teacherPay=firstStu.pay120||500;
+  } else {
+    const tp=+document.getElementById('lrTeacherPrice').value||300;
+    teacherPay=tp;
+  }
   const t=getMyT();const teacherName=t?`${t.name} ${t.surname}`:'';
-  DB.lessons.push({id:Date.now(),name,course:document.getElementById('lrCourse').value,format:document.getElementById('lrFormat').value,teacher:teacherName,teacherId:currentTeacherId,studentIds:checked,studentPrice:+document.getElementById('lrStudentPrice').value||400,teacherPrice:teacherPay,duration:dur,dateTime:document.getElementById('lrDateTime').value||localDateTimeStr(new Date()),isRecorded:true});
+  DB.lessons.push({id:Date.now(),name,course:document.getElementById('lrCourse').value,format:document.getElementById('lrFormat').value,teacher:teacherName,teacherId:currentTeacherId,studentIds:checked,studentPrice:+document.getElementById('lrStudentPrice').value||0,teacherPrice:teacherPay,duration:dur,dateTime:document.getElementById('lrDateTime').value||localDateTimeStr(new Date()),isRecorded:true});
   save();closeModal('modalLessonRecord');notify('Урок внесено ✓','success');
   renderTeacherJournal();renderTeacherDashboard();renderTeacherSalary();
 }
@@ -2397,9 +2416,9 @@ function calcJournalPay(l){
   const sid=l.studentIds?.[0];const s=DB.students.find(s=>s.id===sid);
   if(!s)return l.teacherPrice||0;
   const dur=l.duration||60;
-  if(dur<=60)return s.pay60||calcPay(s,60);
-  if(dur<=90)return s.pay90||calcPay(s,90);
-  return s.pay120||calcPay(s,120);
+  if(dur<=60)return s.pay60||300;
+  if(dur<=90)return s.pay90||400;
+  return s.pay120||500;
 }
 
 function editJournalCell(el,id,field){
