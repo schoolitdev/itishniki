@@ -596,7 +596,7 @@ tr:hover .edit-ic{opacity:1;}
       <div class="inp-group"><div class="inp-label">Курс</div><select class="inp" id="lrCourse"></select></div>
       <div class="inp-group"><div class="inp-label">Формат</div><select class="inp" id="lrFormat"><option value="Індивідуальний">👤 Індивідуальний</option><option value="Дуо">👥 Дуо</option><option value="Група">👨‍👩‍👦 Група</option></select></div>
       <div class="inp-group" id="lrStudentPriceGroup" style="display:none;"><div class="inp-label">Ціна учня грн/год</div><input class="inp" type="number" id="lrStudentPrice" placeholder="400"></div>
-      <div class="inp-group"><div class="inp-label">Виплата (грн)</div><input class="inp" type="number" id="lrTeacherPrice" placeholder="350"></div>
+      <input type="hidden" id="lrTeacherPrice">
     </div>
     <div class="inp-group"><div class="inp-label">Учні</div><div class="stu-cb-list" id="lrStudentList"></div></div>
     <div class="modal-footer"><button class="btn btn-secondary" onclick="closeModal('modalLessonRecord')">Скасувати</button><button class="btn btn-primary" onclick="recordLesson()">✓ Внести урок</button></div>
@@ -2161,8 +2161,8 @@ function renderSalaries(){
       case 'name':return`<td style="font-weight:700;color:var(--text);">${r.name}</td>`;
       case 'subjects':return`<td style="font-size:10px;">${(r.subjects||'').split(',').map(s=>`<span class="badge b-blue" style="font-size:9px;margin:1px;">${s.trim()}</span>`).join('')}</td>`;
       case 'lessons':return`<td style="font-weight:700;color:var(--blue);">${r.count}</td>`;
-      case 'manualSal':return`<td><input class="inp" type="number" style="width:80px;margin:0;padding:3px 7px;font-size:11px;" placeholder="${r.calc}" value="${r.man!==null?r.man:''}" onchange="setManSal('${r.sk}',this.value)"></td>`;
-      case 'total':return`<td style="font-weight:800;font-size:14px;font-family:'Sora',sans-serif;color:${r.paid?'var(--green)':'var(--text)'};">₴${r.final.toLocaleString('uk')}</td>`;
+      case 'manualSal':return`<td><input class="inp" type="number" style="width:80px;margin:0;padding:3px 7px;font-size:11px;" placeholder="${r.calc}" value="${r.man!==null?r.man:''}" onchange="setManSal('${r.sk}',this.value,this)"></td>`;
+      case 'total':return`<td style="font-weight:800;font-size:14px;font-family:'Sora',sans-serif;color:${r.paid?'var(--green)':'var(--text)'};" data-total-cell data-calc="${r.calc}">₴${r.final.toLocaleString('uk')}</td>`;
       case 'status':return`<td><span class="badge ${r.paid?'b-green':'b-yellow'}">${r.paid?'✓ Виплачено':'⏳'}</span></td>`;
       case 'actions':return`<td><button class="btn ${r.paid?'btn-secondary':'btn-success'} btn-sm" onclick="openSalModal('${r.sk}',${r.id},'${r.name}',${r.final},${r.paid})">${r.paid?'↩':'💳'}</button></td>`;
       case 'delete':return`<td><button class="btn btn-danger btn-sm" title="Видалити викладача" onclick="deleteTeacherRow(${r.id})">🗑</button></td>`;
@@ -2170,7 +2170,26 @@ function renderSalaries(){
     }
   }).join('')+'<td></td></tr>').join('')||`<tr><td colspan="${cols.length+1}" style="text-align:center;padding:16px;color:var(--text3);">Немає даних</td></tr>`;
 }
-function setManSal(sk,v){if(!DB.salaryStatuses[sk])DB.salaryStatuses[sk]={paid:false,manualAmount:null};DB.salaryStatuses[sk].manualAmount=v===''?null:+v;save();}
+function setManSal(sk,v,inputEl){
+  if(!DB.salaryStatuses[sk])DB.salaryStatuses[sk]={paid:false,manualAmount:null};
+  const num=v===''?null:+v;
+  DB.salaryStatuses[sk].manualAmount=num;
+  save();
+  // Update До виплати cell in same row without full re-render
+  if(inputEl){
+    const row=inputEl.closest('tr');
+    if(row){
+      const totalCell=row.querySelector('[data-total-cell]');
+      if(totalCell){
+        const r=DB.salaryStatuses[sk];
+        const calc=num!==null?num:totalCell.dataset.calc;
+        const final=num!==null?num:+calc;
+        totalCell.textContent='₴'+final.toLocaleString('uk');
+        totalCell.style.color=r.paid?'var(--green)':'var(--text)';
+      }
+    }
+  }
+}
 function editTchRate(tid){const t=DB.teachers.find(t=>t.id===tid);if(!t)return;const r=prompt('Нова ставка за урок (грн):',t.rate);if(r!==null&&!isNaN(r)){t.rate=+r;save();renderSalaries();notify('✓','success');}}
 function deleteTeacherRow(tid){
   const t=DB.teachers.find(t=>t.id===tid);if(!t)return;
