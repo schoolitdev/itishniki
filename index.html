@@ -31,22 +31,7 @@
 
 <title>ITishniki</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<!-- Firebase SDK — завантажується тільки на реальному сайті -->
-<script>
-(function(){
-  // Не завантажуємо Firebase в Claude preview iframe
-  if(window.self!==window.top)return;
-  var s1=document.createElement('script');
-  s1.src='https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js';
-  s1.onload=function(){
-    var s2=document.createElement('script');
-    s2.src='https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js';
-    s2.onload=function(){window._firebaseReady=true;};
-    document.head.appendChild(s2);
-  };
-  document.head.appendChild(s1);
-})();
-</script>
+<!-- Firebase REST API використовується напряму через fetch -->
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -1377,10 +1362,17 @@ let tmpTchSchedule=[]; // temp for teacher schedule editor
 // ── LOGIN ──
 function showLogin(){
   load();
-  // Init Firebase after short delay (SDK async load)
-  setTimeout(()=>{try{initFirebase();}catch(e){}},1500);
   document.getElementById('loginScreen').classList.remove('hidden');
   document.getElementById('loginUser').focus();
+  // Синхронізуємо з хмарою одразу
+  syncFromCloud();
+}
+function enterApp(){
+  document.getElementById('loginScreen').classList.add('hidden');
+  document.getElementById('mainApp').style.display='flex';
+  initApp();
+  // Синхронізуємо після входу
+  syncFromCloud();
 }
 function doLogin(){
   const user=document.getElementById('loginUser').value.trim().toLowerCase();
@@ -1394,72 +1386,29 @@ function doLogin(){
   document.getElementById('loginPass').value='';
   setTimeout(()=>document.getElementById('loginErr').textContent='',3000);
 }
-function enterApp(){document.getElementById('loginScreen').classList.add('hidden');document.getElementById('mainApp').style.display='flex';initApp();}
 function doLogout(){document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';currentRole='admin';currentTeacherId=null;}
 
 // ── STORAGE ──
-// ══════════════════════════════════════
-// FIREBASE CONFIG
-// Зайди на console.firebase.google.com
-// і вставте сюди свій конфіг
-// ══════════════════════════════════════
-const FIREBASE_CONFIG={
-  apiKey:"AIzaSyCITt_rDQUdlkNDR4Xn80_yDqps2rFARTo",
-  authDomain:"itishniki-91068.firebaseapp.com",
-  databaseURL:"https://itishniki-91068-default-rtdb.europe-west1.firebasedatabase.app",
-  projectId:"itishniki-91068",
-  storageBucket:"itishniki-91068.firebasestorage.app",
-  messagingSenderId:"210864217070",
-  appId:"1:210864217070:web:25d2f6854b8eed75080cff"
-};
+const DB_URL='https://itishniki-91068-default-rtdb.europe-west1.firebasedatabase.app/data.json';
+const SAVE_KEY='itishniki_v7';
+let _isSyncing=false;
 
-let firebaseRef=null;
-let _cloudEnabled=false;
-
-function initFirebase(){
-  if(typeof firebase==='undefined'||!window._firebaseReady){
-    showCloudStatus(false);return;
-  }
+// Проста функція запису в Firebase через fetch REST
+async function cloudSave(data){
   try{
-    if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
-    firebaseRef=firebase.database().ref('school_data');
-    _cloudEnabled=true;
+    const r=await fetch(DB_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(r.ok){showCloudStatus(true);console.log('☁️ Збережено в хмару');}
+    else console.warn('Cloud save HTTP error:',r.status);
+  }catch(e){showCloudStatus(false);console.warn('Cloud save failed:',e.message);}
+}
 
-    // Get cloud data and compare timestamps
-    firebaseRef.once('value').then(snap=>{
-      const cloud=snap.val();
-      const localTs=+localStorage.getItem('itishniki_ts')||0;
-      const cloudTs=cloud?._ts||0;
-
-      if(cloud&&cloudTs>localTs){
-        // Cloud is newer — use cloud data
-        const keys=['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'];
-        keys.forEach(k=>{if(cloud[k]!==undefined&&cloud[k]!==null)DB[k]=cloud[k];});
-        // Save to localStorage so next time we have latest
-        localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
-        localStorage.setItem('itishniki_ts',cloudTs);
-        try{renderAll();}catch(e){}
-        console.log('☁️ Завантажено з хмари (новіші дані)');
-      } else if(localTs>0){
-        // Local is newer — push local to cloud
-        console.log('💾 Локальні дані новіші — синхронізуємо в хмару');
-        save();
-      } else if(cloud){
-        // No local timestamp, take cloud
-        const keys=['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'];
-        keys.forEach(k=>{if(cloud[k]!==undefined&&cloud[k]!==null)DB[k]=cloud[k];});
-        localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
-        try{renderAll();}catch(e){}
-      }
-      showCloudStatus(true);
-    }).catch(e=>{
-      console.warn('Firebase read failed:',e.message);
-      showCloudStatus(false);
-    });
-  }catch(e){
-    console.warn('Firebase init failed:',e.message);
-    showCloudStatus(false);
-  }
+// Проста функція читання з Firebase через fetch REST
+async function cloudLoad(){
+  try{
+    const r=await fetch(DB_URL+'?t='+Date.now());// cache bust
+    if(!r.ok)return null;
+    return await r.json();
+  }catch(e){console.warn('Cloud load failed:',e.message);return null;}
 }
 
 function showCloudStatus(online){
@@ -1469,36 +1418,25 @@ function showCloudStatus(online){
   if(label)label.textContent=online?'Хмара':'Локально';
 }
 
-const SAVE_KEY='itishniki_v7';
-
 function save(){
+  // 1. Завжди зберігаємо локально — миттєво
   const ts=Date.now();
-  // 1. localStorage
   try{
     localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
-    localStorage.setItem('itishniki_ts',ts);
-  }catch(e){
-    try{['itishniki_v6_1','itishniki_v6'].forEach(k=>localStorage.removeItem(k));localStorage.setItem(SAVE_KEY,JSON.stringify(DB));localStorage.setItem('itishniki_ts',ts);}
-    catch(e2){try{sessionStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e3){}}
-  }
-  // 2. Firebase with timestamp
-  if(_cloudEnabled&&firebaseRef){
-    const payload={_ts:ts};
-    ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'].forEach(k=>{payload[k]=DB[k]??null;});
-    firebaseRef.set(payload)
-      .then(()=>console.log('☁️ Збережено ts='+ts))
-      .catch(e=>console.warn('Cloud save error:',e.message));
-  }
+    localStorage.setItem('itishniki_ts',String(ts));
+  }catch(e){try{sessionStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e2){}}
+
+  // 2. Пушимо в Firebase асинхронно
+  const payload={_ts:ts,students:DB.students,payments:DB.payments,lessons:DB.lessons,teachers:DB.teachers,debts:DB.debts,courses:DB.courses,adSpend:DB.adSpend,adNotes:DB.adNotes,geo:DB.geo,sources:DB.sources,settings:DB.settings,salaryStatuses:DB.salaryStatuses,customCols:DB.customCols,customData:DB.customData,schedules:DB.schedules,overrideSlots:DB.overrideSlots,tariffs:DB.tariffs,teacherTariffs:DB.teacherTariffs};
+  cloudSave(payload);
 }
 
 function load(){
   try{
-    ['itishniki_v6_1','itishniki_v6','itishniki_v5'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
     let raw=localStorage.getItem(SAVE_KEY)||sessionStorage.getItem(SAVE_KEY);
     if(raw&&raw.length>10){
       const p=JSON.parse(raw);
       ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined&&p[k]!==null)DB[k]=p[k];});
-      // Migration: groupId
       const key=s=>`${s.format}|${s.course}|${s.teacher}|${s.startDate}|${s.source}|${s.pay60}`;
       const buckets={};
       DB.students.filter(s=>(s.format==='Дуо'||s.format==='Група')&&!s.groupId).forEach(s=>{const k=key(s);if(!buckets[k])buckets[k]=[];buckets[k].push(s);});
@@ -1507,8 +1445,32 @@ function load(){
   }catch(e){console.error('Load error:',e);}
 }
 
-// Auto-save every 15s + before close
-setInterval(save,15000);
+// При відкритті — завантажуємо з хмари і беремо новіші дані
+async function syncFromCloud(){
+  if(_isSyncing)return;_isSyncing=true;
+  try{
+    const cloud=await cloudLoad();
+    if(!cloud){showCloudStatus(false);_isSyncing=false;return;}
+    const localTs=+localStorage.getItem('itishniki_ts')||0;
+    const cloudTs=cloud._ts||0;
+    if(cloudTs>localTs){
+      // Хмара новіша — беремо з хмари
+      ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'].forEach(k=>{if(cloud[k]!==undefined&&cloud[k]!==null)DB[k]=cloud[k];});
+      localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
+      localStorage.setItem('itishniki_ts',String(cloudTs));
+      try{renderAll();}catch(e){}
+      console.log('☁️ Оновлено з хмари');
+    } else {
+      // Локальне новіше або рівне — пушимо в хмару
+      if(localTs>0)save();
+    }
+    showCloudStatus(true);
+  }catch(e){showCloudStatus(false);}
+  _isSyncing=false;
+}
+
+// Авто-збереження кожні 30с
+setInterval(save,30000);
 window.addEventListener('beforeunload',save);
 window.addEventListener('pagehide',save);
 
