@@ -1392,28 +1392,30 @@ function doLogout(){document.getElementById('mainApp').style.display='none';docu
 const DB_URL='https://itishniki-91068-default-rtdb.europe-west1.firebasedatabase.app/data.json';
 const SAVE_KEY='itishniki_v7';
 let _isSyncing=false;
+let _lastSaveTime=0; // час останнього save() — блокуємо sync після збереження
 
-// Проста функція запису в Firebase через fetch REST
-async function cloudSave(data){
+async function cloudPUT(data){
   try{
-    const r=await fetch(DB_URL,{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
-    if(r.ok){showCloudStatus(true);console.log('☁️ Збережено в хмару');}
-    else console.warn('Cloud save HTTP error:',r.status);
-  }catch(e){showCloudStatus(false);console.warn('Cloud save failed:',e.message);}
+    const r=await fetch(DB_URL,{
+      method:'PUT',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify(data)
+    });
+    showCloudStatus(r.ok);
+    return r.ok;
+  }catch(e){showCloudStatus(false);return false;}
 }
 
-// Проста функція читання з Firebase через fetch REST
-async function cloudLoad(){
+async function cloudGET(){
   try{
-    const url=DB_URL+'?nocache='+Date.now();
-    const r=await fetch(url,{
-      method:'GET',
+    const r=await fetch(DB_URL+'?t='+Date.now(),{
       cache:'no-store',
-      headers:{'Cache-Control':'no-cache','Pragma':'no-cache'}
+      headers:{'Cache-Control':'no-cache'}
     });
     if(!r.ok)return null;
-    return await r.json();
-  }catch(e){console.warn('Cloud load failed:',e.message);return null;}
+    const d=await r.json();
+    return d&&typeof d==='object'?d:null;
+  }catch(e){return null;}
 }
 
 function showCloudStatus(online){
@@ -1423,63 +1425,100 @@ function showCloudStatus(online){
   if(label)label.textContent=online?'Хмара':'Локально';
 }
 
+function getDBPayload(ts){
+  return{
+    _ts:ts,
+    students:DB.students,payments:DB.payments,lessons:DB.lessons,
+    teachers:DB.teachers,debts:DB.debts,courses:DB.courses,
+    adSpend:DB.adSpend,adNotes:DB.adNotes,geo:DB.geo,sources:DB.sources,
+    settings:DB.settings,salaryStatuses:DB.salaryStatuses,
+    customCols:DB.customCols,customData:DB.customData,
+    schedules:DB.schedules,overrideSlots:DB.overrideSlots,
+    tariffs:DB.tariffs,teacherTariffs:DB.teacherTariffs
+  };
+}
+
+function applyCloudData(cloud){
+  ['students','payments','lessons','teachers','debts','courses',
+   'adSpend','adNotes','geo','sources','settings','salaryStatuses',
+   'customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'
+  ].forEach(k=>{if(cloud[k]!==undefined&&cloud[k]!==null)DB[k]=cloud[k];});
+}
+
+// Зберігаємо: спочатку локально, потім в Firebase
 function save(){
-  // 1. Завжди зберігаємо локально — миттєво
   const ts=Date.now();
+  _lastSaveTime=ts;
+  // Локально
   try{
     localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
     localStorage.setItem('itishniki_ts',String(ts));
-  }catch(e){try{sessionStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e2){}}
-
-  // 2. Пушимо в Firebase асинхронно
-  const payload={_ts:ts,students:DB.students,payments:DB.payments,lessons:DB.lessons,teachers:DB.teachers,debts:DB.debts,courses:DB.courses,adSpend:DB.adSpend,adNotes:DB.adNotes,geo:DB.geo,sources:DB.sources,settings:DB.settings,salaryStatuses:DB.salaryStatuses,customCols:DB.customCols,customData:DB.customData,schedules:DB.schedules,overrideSlots:DB.overrideSlots,tariffs:DB.tariffs,teacherTariffs:DB.teacherTariffs};
-  cloudSave(payload);
+  }catch(e){}
+  // Firebase
+  cloudPUT(getDBPayload(ts));
 }
 
+// Завантажуємо при старті
 function load(){
   try{
-    let raw=localStorage.getItem(SAVE_KEY)||sessionStorage.getItem(SAVE_KEY);
+    const raw=localStorage.getItem(SAVE_KEY)||sessionStorage.getItem(SAVE_KEY);
     if(raw&&raw.length>10){
       const p=JSON.parse(raw);
-      ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined&&p[k]!==null)DB[k]=p[k];});
+      ['students','payments','lessons','teachers','debts','courses','adSpend',
+       'adNotes','geo','sources','settings','salaryStatuses','customCols',
+       'customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'
+      ].forEach(k=>{if(p[k]!==undefined&&p[k]!==null)DB[k]=p[k];});
+      // Migration groupId
       const key=s=>`${s.format}|${s.course}|${s.teacher}|${s.startDate}|${s.source}|${s.pay60}`;
       const buckets={};
-      DB.students.filter(s=>(s.format==='Дуо'||s.format==='Група')&&!s.groupId).forEach(s=>{const k=key(s);if(!buckets[k])buckets[k]=[];buckets[k].push(s);});
-      Object.values(buckets).forEach(grp=>{if(grp.length>1){const gid='grp_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);grp.forEach(s=>s.groupId=gid);}});
+      DB.students.filter(s=>(s.format==='Дуо'||s.format==='Група')&&!s.groupId)
+        .forEach(s=>{const k=key(s);if(!buckets[k])buckets[k]=[];buckets[k].push(s);});
+      Object.values(buckets).forEach(grp=>{
+        if(grp.length>1){
+          const gid='grp_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);
+          grp.forEach(s=>s.groupId=gid);
+        }
+      });
     }
-  }catch(e){console.error('Load error:',e);}
+  }catch(e){}
 }
 
-// При відкритті — завантажуємо з хмари і беремо новіші дані
+// Синхронізація з Firebase
 async function syncFromCloud(){
+  // Не синхронізуємо якщо щойно зберігали (чекаємо 5 секунд)
   if(_isSyncing)return;
+  if(Date.now()-_lastSaveTime<5000)return;
   _isSyncing=true;
   try{
-    const cloud=await cloudLoad();
+    const cloud=await cloudGET();
     if(!cloud){showCloudStatus(false);_isSyncing=false;return;}
     const cloudTs=cloud._ts||0;
     const localTs=+localStorage.getItem('itishniki_ts')||0;
-
-    if(cloudTs>=localTs){
-      // Firebase — завжди правда якщо не старіше
-      const keys=['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'];
-      keys.forEach(k=>{if(cloud[k]!==undefined)DB[k]=cloud[k]!==null?cloud[k]:DB[k];});
-      try{localStorage.setItem(SAVE_KEY,JSON.stringify(DB));localStorage.setItem('itishniki_ts',String(cloudTs));}catch(e){}
+    if(cloudTs>localTs){
+      // Firebase має новіші дані (інший пристрій зробив зміни)
+      applyCloudData(cloud);
+      try{
+        localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
+        localStorage.setItem('itishniki_ts',String(cloudTs));
+      }catch(e){}
       try{renderAll();}catch(e){}
       showCloudStatus(true);
     } else {
-      // Локальне новіше — синхронізуємо в хмару
-      save();
       showCloudStatus(true);
     }
   }catch(e){showCloudStatus(false);}
   _isSyncing=false;
 }
 
-// Авто-синхронізація кожні 10 секунд
-setInterval(syncFromCloud,10000);
+// Синхронізуємо кожні 8 секунд
+setInterval(syncFromCloud,8000);
+// Зберігаємо при закритті
 window.addEventListener('beforeunload',save);
 window.addEventListener('pagehide',save);
+// Синхронізуємо при поверненні на вкладку
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible')syncFromCloud();
+});
 
 // ── INIT ──
 function initApp(){
