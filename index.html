@@ -1170,16 +1170,16 @@ tr:hover .edit-ic{opacity:1;}
 
 <!-- ════ TEACHER DASHBOARD ════ -->
 <div class="page" id="page-teacher-dashboard">
-  <div class="grid g4" style="margin-bottom:12px;">
-    <div class="card kpi"><div class="kpi-label">Моїх учнів</div><div class="kpi-value blue" id="tDashStudents">0</div></div>
-    <div class="card kpi"><div class="kpi-label">Уроків сьогодні</div><div class="kpi-value green" id="tDashToday">0</div></div>
-    <div class="card kpi"><div class="kpi-label">Уроків місяць</div><div class="kpi-value orange" id="tDashMonthLessons">0</div></div>
-    <div class="card kpi"><div class="kpi-label">ЗП місяць</div><div class="kpi-value purple" id="tDashMonthSal">₴0</div></div>
+  <div class="grid g4" style="margin-bottom:16px;">
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box blue">👥</div><div class="kpi-card-body"><div class="kpi-label">Моїх учнів</div><div class="kpi-value blue" id="tDashStudents">0</div></div></div></div>
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box green">📅</div><div class="kpi-card-body"><div class="kpi-label">Уроків сьогодні</div><div class="kpi-value green" id="tDashToday">0</div></div></div></div>
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box orange">📆</div><div class="kpi-card-body"><div class="kpi-label">Уроків місяць</div><div class="kpi-value orange" id="tDashMonthLessons">0</div></div></div></div>
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box purple">💳</div><div class="kpi-card-body"><div class="kpi-label">ЗП місяць</div><div class="kpi-value purple" id="tDashMonthSal">₴0</div><div class="kpi-change-label">нарахування</div></div></div></div>
   </div>
-  <div class="grid g3" style="margin-bottom:12px;">
-    <div class="card kpi"><div class="kpi-label">Сьогодні</div><div class="kpi-value blue" id="tSalDay">₴0</div><div style="font-size:10px;color:var(--text3);margin-top:3px;">нарахування</div></div>
-    <div class="card kpi"><div class="kpi-label">Тиждень</div><div class="kpi-value green" id="tSalWeek">₴0</div><div style="font-size:10px;color:var(--text3);margin-top:3px;">нарахування</div></div>
-    <div class="card kpi"><div class="kpi-label">Місяць</div><div class="kpi-value orange" id="tSalMonth">₴0</div><div style="font-size:10px;color:var(--text3);margin-top:3px;">нарахування</div></div>
+  <div class="grid g3" style="margin-bottom:16px;">
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box blue">🌅</div><div class="kpi-card-body"><div class="kpi-label">ЗП сьогодні</div><div class="kpi-value blue" id="tSalDay">₴0</div><div class="kpi-change-label">нарахування</div></div></div></div>
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box green">📊</div><div class="kpi-card-body"><div class="kpi-label">ЗП тиждень</div><div class="kpi-value green" id="tSalWeek">₴0</div><div class="kpi-change-label">нарахування</div></div></div></div>
+    <div class="card kpi"><div class="kpi-card-row"><div class="kpi-icon-box cyan">💰</div><div class="kpi-card-body"><div class="kpi-label">ЗП за весь час</div><div class="kpi-value cyan" id="tSalMonth">₴0</div><div class="kpi-change-label">всього зароблено</div></div></div></div>
   </div>
   <!-- Next lesson widget -->
   <div class="card" style="margin-bottom:12px;border-left:3px solid var(--blue);">
@@ -1347,26 +1347,42 @@ function enterApp(){document.getElementById('loginScreen').classList.add('hidden
 function doLogout(){document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';currentRole='admin';currentTeacherId=null;}
 
 // ── STORAGE ──
-function save(){try{localStorage.setItem('itishniki_v7',JSON.stringify(DB));}catch(e){}}
+const SAVE_KEY='itishniki_v7';
+function save(){
+  try{
+    const data=JSON.stringify(DB);
+    localStorage.setItem(SAVE_KEY,data);
+  }catch(e){
+    // localStorage full or blocked — try clearing old keys first
+    try{
+      ['itishniki_v6_1','itishniki_v6','itishniki_v5'].forEach(k=>localStorage.removeItem(k));
+      localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
+    }catch(e2){
+      // Last resort: sessionStorage
+      try{sessionStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e3){}
+    }
+  }
+}
 function load(){
   try{
-    ['itishniki_v6_1','itishniki_v6','itishniki_v5'].forEach(k=>localStorage.removeItem(k));
-    const d=localStorage.getItem('itishniki_v7');
-    if(d){
-      const p=JSON.parse(d);
-      ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined)DB[k]=p[k];});
-      // Migration: assign groupId to Дуо/Група students without one
-      // Group by format+course+teacher+startDate+source+pay60 that appear exactly in pairs/triplets
-      const untagged=DB.students.filter(s=>(s.format==='Дуо'||s.format==='Група')&&!s.groupId);
+    ['itishniki_v6_1','itishniki_v6','itishniki_v5'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
+    let raw=localStorage.getItem(SAVE_KEY)||sessionStorage.getItem(SAVE_KEY);
+    if(raw&&raw.length>10){
+      const p=JSON.parse(raw);
+      ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined&&p[k]!==null)DB[k]=p[k];});
+      // Migration: groupId for Дуо/Група
       const key=s=>`${s.format}|${s.course}|${s.teacher}|${s.startDate}|${s.source}|${s.pay60}`;
       const buckets={};
-      untagged.forEach(s=>{const k=key(s);if(!buckets[k])buckets[k]=[];buckets[k].push(s);});
-      Object.values(buckets).forEach(grp=>{
-        if(grp.length>1){const gid='grp_'+Date.now()+'_'+Math.random().toString(36).slice(2);grp.forEach(s=>s.groupId=gid);}
-      });
+      DB.students.filter(s=>(s.format==='Дуо'||s.format==='Група')&&!s.groupId).forEach(s=>{const k=key(s);if(!buckets[k])buckets[k]=[];buckets[k].push(s);});
+      Object.values(buckets).forEach(grp=>{if(grp.length>1){const gid='grp_'+Date.now()+'_'+Math.random().toString(36).slice(2,7);grp.forEach(s=>s.groupId=gid);}});
     }
-  }catch(e){}
+  }catch(e){console.error('Load error:',e);}
 }
+// Auto-save every 15 seconds
+setInterval(save,15000);
+// Save before page close
+window.addEventListener('beforeunload',save);
+window.addEventListener('pagehide',save);
 
 // ── INIT ──
 function initApp(){
