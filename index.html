@@ -3,9 +3,35 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
-<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 36 36'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='%233d7eff'/><stop offset='1' stop-color='%238b5cf6'/></linearGradient></defs><rect width='36' height='36' rx='8' fill='url(%23g)'/><text x='18' y='25' font-family='Arial Black,sans-serif' font-size='15' font-weight='900' fill='white' text-anchor='middle'>IT</text></svg>">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="ITishniki">
+<meta name="theme-color" content="#1B2559">
+
+<!-- Favicon (SVG — works in Chrome/Firefox) -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234C6EF5'/%3E%3Cstop offset='1' stop-color='%237950F2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='180' height='180' rx='40' fill='url(%23g)'/%3E%3Ctext x='90' y='128' font-family='Arial Black,sans-serif' font-size='90' font-weight='900' fill='white' text-anchor='middle'%3EIT%3C/text%3E%3C/svg%3E">
+
+<!-- Apple Touch Icon (PNG-encoded SVG для Safari/iPhone) -->
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Cdefs%3E%3ClinearGradient id='g' x1='0' y1='0' x2='1' y2='1'%3E%3Cstop offset='0' stop-color='%234C6EF5'/%3E%3Cstop offset='1' stop-color='%237950F2'/%3E%3C/linearGradient%3E%3C/defs%3E%3Crect width='180' height='180' rx='0' fill='url(%23g)'/%3E%3Ctext x='90' y='128' font-family='Arial Black,sans-serif' font-size='90' font-weight='900' fill='white' text-anchor='middle'%3EIT%3C/text%3E%3C/svg%3E">
+
 <title>ITishniki</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<!-- Firebase SDK — завантажується тільки на реальному сайті -->
+<script>
+(function(){
+  // Не завантажуємо Firebase в Claude preview iframe
+  if(window.self!==window.top)return;
+  var s1=document.createElement('script');
+  s1.src='https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js';
+  s1.onload=function(){
+    var s2=document.createElement('script');
+    s2.src='https://www.gstatic.com/firebasejs/9.23.0/firebase-database-compat.js';
+    s2.onload=function(){window._firebaseReady=true;};
+    document.head.appendChild(s2);
+  };
+  document.head.appendChild(s1);
+})();
+</script>
 <link href="https://fonts.googleapis.com/css2?family=Sora:wght@400;500;600;700;800&family=DM+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
 :root{
@@ -815,6 +841,10 @@ tr:hover .edit-ic{opacity:1;}
       <div class="topbar-icon-btn" onclick="toggleNotifPanel()" title="Сповіщення">🔔<div class="topbar-notif-dot" id="notifDot" style="display:none;"></div></div>
       <div class="topbar-date-badge">📅 <span id="topDate"></span></div>
       <div class="live-badge"><div class="live-dot"></div>Онлайн</div>
+      <div style="display:flex;align-items:center;gap:4px;padding:5px 10px;background:var(--bg3);border:1px solid var(--border);border-radius:var(--r2);">
+        <div style="width:7px;height:7px;border-radius:50%;background:var(--text3);flex-shrink:0;" id="cloudDot"></div>
+        <span style="font-size:10px;color:var(--text3);font-weight:600;" id="cloudLabel">Локально</span>
+      </div>
       <button class="topbar-btn" id="btnTransaction" onclick="openModal('modalPayment')">+ Транзакція</button>
       <button class="topbar-btn primary" id="btnAddStudent" onclick="openAddStudent()">+ Учень</button>
     </div>
@@ -1330,7 +1360,13 @@ let tmpTchSchedule=[]; // temp for teacher schedule editor
 (function(){const p=document.getElementById('loaderProg');let i=0;const iv=setInterval(()=>{i++;p.style.width=(i/3*100)+'%';if(i>=3){clearInterval(iv);setTimeout(()=>{const l=document.getElementById('loader');l.style.opacity='0';l.style.pointerEvents='none';setTimeout(()=>l.remove(),500);showLogin();},400);}},320);})();
 
 // ── LOGIN ──
-function showLogin(){load();document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('loginUser').focus();}
+function showLogin(){
+  load();
+  // Init Firebase after short delay (SDK async load)
+  setTimeout(()=>{try{initFirebase();}catch(e){}},1500);
+  document.getElementById('loginScreen').classList.remove('hidden');
+  document.getElementById('loginUser').focus();
+}
 function doLogin(){
   const user=document.getElementById('loginUser').value.trim().toLowerCase();
   const pass=document.getElementById('loginPass').value;
@@ -1347,22 +1383,82 @@ function enterApp(){document.getElementById('loginScreen').classList.add('hidden
 function doLogout(){document.getElementById('mainApp').style.display='none';document.getElementById('loginScreen').classList.remove('hidden');document.getElementById('loginUser').value='';document.getElementById('loginPass').value='';currentRole='admin';currentTeacherId=null;}
 
 // ── STORAGE ──
-const SAVE_KEY='itishniki_v7';
-function save(){
+// ══════════════════════════════════════
+// FIREBASE CONFIG
+// Зайди на console.firebase.google.com
+// і вставте сюди свій конфіг
+// ══════════════════════════════════════
+const FIREBASE_CONFIG={
+  apiKey:"AIzaSyCITt_rDQUdlkNDR4Xn80_yDqps2rFARTo",
+  authDomain:"itishniki-91068.firebaseapp.com",
+  databaseURL:"https://itishniki-91068-default-rtdb.europe-west1.firebasedatabase.app",
+  projectId:"itishniki-91068",
+  storageBucket:"itishniki-91068.firebasestorage.app",
+  messagingSenderId:"210864217070",
+  appId:"1:210864217070:web:25d2f6854b8eed75080cff"
+};
+
+let firebaseRef=null;
+let _saveTimer=null;
+let _cloudEnabled=false;
+
+function initFirebase(){
+  // Skip if Firebase SDK not loaded (preview/offline)
+  if(typeof firebase==='undefined'||!window._firebaseReady){
+    console.info('ℹ️ Firebase SDK не завантажено — використовуємо localStorage');
+    showCloudStatus(false);
+    return;
+  }
   try{
-    const data=JSON.stringify(DB);
-    localStorage.setItem(SAVE_KEY,data);
+    if(!firebase.apps.length)firebase.initializeApp(FIREBASE_CONFIG);
+    const db=firebase.database();
+    firebaseRef=db.ref('school_data');
+    _cloudEnabled=true;
+    // Listen for real-time updates from other devices
+    firebaseRef.on('value',snap=>{
+      const data=snap.val();
+      if(!data)return;
+      const keys=['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'];
+      keys.forEach(k=>{if(data[k]!==undefined&&data[k]!==null)DB[k]=data[k];});
+      if(document.querySelector('.page.active'))try{renderAll();}catch(e){}
+      console.log('☁️ Синхронізовано');
+    });
+    showCloudStatus(true);
+    console.log('✓ Firebase підключено — дані синхронізуються між пристроями');
   }catch(e){
-    // localStorage full or blocked — try clearing old keys first
-    try{
-      ['itishniki_v6_1','itishniki_v6','itishniki_v5'].forEach(k=>localStorage.removeItem(k));
-      localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
-    }catch(e2){
-      // Last resort: sessionStorage
-      try{sessionStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e3){}
-    }
+    console.warn('Firebase недоступний:',e.message);
+    showCloudStatus(false);
   }
 }
+
+function showCloudStatus(online){
+  const dot=document.getElementById('cloudDot');
+  if(dot)dot.style.background=online?'var(--green)':'var(--text3)';
+  const label=document.getElementById('cloudLabel');
+  if(label)label.textContent=online?'Хмара':'Локально';
+}
+
+const SAVE_KEY='itishniki_v7';
+
+function save(){
+  // 1. Always save to localStorage first (instant, no network needed)
+  try{localStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e){
+    try{
+      ['itishniki_v6_1','itishniki_v6'].forEach(k=>localStorage.removeItem(k));
+      localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
+    }catch(e2){try{sessionStorage.setItem(SAVE_KEY,JSON.stringify(DB));}catch(e3){}}
+  }
+  // 2. Debounced save to Firebase (300ms delay to batch rapid changes)
+  if(_cloudEnabled&&firebaseRef){
+    clearTimeout(_saveTimer);
+    _saveTimer=setTimeout(()=>{
+      const payload={};
+      ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'].forEach(k=>{payload[k]=DB[k];});
+      firebaseRef.set(payload).then(()=>console.log('☁️ Збережено в хмару')).catch(e=>console.warn('Cloud save failed:',e));
+    },300);
+  }
+}
+
 function load(){
   try{
     ['itishniki_v6_1','itishniki_v6','itishniki_v5'].forEach(k=>{try{localStorage.removeItem(k);}catch(e){}});
@@ -1370,7 +1466,7 @@ function load(){
     if(raw&&raw.length>10){
       const p=JSON.parse(raw);
       ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','courseNotifs','tariffs','teacherTariffs'].forEach(k=>{if(p[k]!==undefined&&p[k]!==null)DB[k]=p[k];});
-      // Migration: groupId for Дуо/Група
+      // Migration: groupId
       const key=s=>`${s.format}|${s.course}|${s.teacher}|${s.startDate}|${s.source}|${s.pay60}`;
       const buckets={};
       DB.students.filter(s=>(s.format==='Дуо'||s.format==='Група')&&!s.groupId).forEach(s=>{const k=key(s);if(!buckets[k])buckets[k]=[];buckets[k].push(s);});
@@ -1378,9 +1474,9 @@ function load(){
     }
   }catch(e){console.error('Load error:',e);}
 }
-// Auto-save every 15 seconds
+
+// Auto-save every 15s + before close
 setInterval(save,15000);
-// Save before page close
 window.addEventListener('beforeunload',save);
 window.addEventListener('pagehide',save);
 
