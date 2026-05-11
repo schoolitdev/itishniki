@@ -1405,7 +1405,12 @@ async function cloudSave(data){
 // Проста функція читання з Firebase через fetch REST
 async function cloudLoad(){
   try{
-    const r=await fetch(DB_URL+'?t='+Date.now());// cache bust
+    const url=DB_URL+'?nocache='+Date.now();
+    const r=await fetch(url,{
+      method:'GET',
+      cache:'no-store',
+      headers:{'Cache-Control':'no-cache','Pragma':'no-cache'}
+    });
     if(!r.ok)return null;
     return await r.json();
   }catch(e){console.warn('Cloud load failed:',e.message);return null;}
@@ -1447,30 +1452,32 @@ function load(){
 
 // При відкритті — завантажуємо з хмари і беремо новіші дані
 async function syncFromCloud(){
-  if(_isSyncing)return;_isSyncing=true;
+  if(_isSyncing)return;
+  _isSyncing=true;
   try{
     const cloud=await cloudLoad();
     if(!cloud){showCloudStatus(false);_isSyncing=false;return;}
-    const localTs=+localStorage.getItem('itishniki_ts')||0;
     const cloudTs=cloud._ts||0;
-    if(cloudTs>localTs){
-      // Хмара новіша — беремо з хмари
-      ['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'].forEach(k=>{if(cloud[k]!==undefined&&cloud[k]!==null)DB[k]=cloud[k];});
-      localStorage.setItem(SAVE_KEY,JSON.stringify(DB));
-      localStorage.setItem('itishniki_ts',String(cloudTs));
+    const localTs=+localStorage.getItem('itishniki_ts')||0;
+
+    if(cloudTs>=localTs){
+      // Firebase — завжди правда якщо не старіше
+      const keys=['students','payments','lessons','teachers','debts','courses','adSpend','adNotes','geo','sources','settings','salaryStatuses','customCols','customData','schedules','overrideSlots','tariffs','teacherTariffs'];
+      keys.forEach(k=>{if(cloud[k]!==undefined)DB[k]=cloud[k]!==null?cloud[k]:DB[k];});
+      try{localStorage.setItem(SAVE_KEY,JSON.stringify(DB));localStorage.setItem('itishniki_ts',String(cloudTs));}catch(e){}
       try{renderAll();}catch(e){}
-      console.log('☁️ Оновлено з хмари');
+      showCloudStatus(true);
     } else {
-      // Локальне новіше або рівне — пушимо в хмару
-      if(localTs>0)save();
+      // Локальне новіше — синхронізуємо в хмару
+      save();
+      showCloudStatus(true);
     }
-    showCloudStatus(true);
   }catch(e){showCloudStatus(false);}
   _isSyncing=false;
 }
 
-// Авто-збереження кожні 30с
-setInterval(save,30000);
+// Авто-синхронізація кожні 10 секунд
+setInterval(syncFromCloud,10000);
 window.addEventListener('beforeunload',save);
 window.addEventListener('pagehide',save);
 
